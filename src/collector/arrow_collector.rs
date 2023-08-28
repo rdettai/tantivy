@@ -11,9 +11,6 @@ use arrow::record_batch::RecordBatch;
 use columnar::ColumnType;
 use itertools::Itertools;
 
-// TODO investigate why dynamic_column_handle can return None
-// -> meant to support schema evolution?
-
 // TODO support all types
 
 // TODO collect arrays of docs and process batches ()
@@ -166,19 +163,16 @@ impl Collector for ArrowCollector {
             .fast_fields_to_collect
             .iter()
             .map(|(cname, ctype)| -> crate::Result<(String, DynamicColumn)> {
-                let handle_res = segment_reader
-                    .fast_fields()
-                    .dynamic_column_handle(cname, ctype.to_owned());
-                let handle = handle_res?.ok_or_else(|| {
+                let col_res = segment_reader.fast_fields().column_opt(cname);
+                let col = col_res?.ok_or_else(|| {
                     // TODO: should error here? the return type seems to be an
-                    // option for future support of schema evolution
+                    // Option for future support of schema evolution
                     crate::error::TantivyError::FieldNotFound(format!(
                         "fastfield {} of type {} not found",
                         cname, ctype
                     ))
                 })?;
-                let dyn_col = handle.open()?;
-                Ok((cname.clone(), dyn_col))
+                Ok((cname.clone(), col.into()))
             })
             .collect::<crate::Result<_>>()?;
 
